@@ -1,0 +1,14 @@
+# Binary Folders
+/app
+/bin
+/mysql-*-winx64
+/apache
+/php
+
+# Python Cache
+__pycache__/
+*.pyc
+
+# IDE settings
+.vscode/
+.idea/
