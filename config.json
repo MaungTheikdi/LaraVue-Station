@@ -1,0 +1,11 @@
+{
+    "apache": {
+        "port": 8080,
+        "conf": "D:\\maung\\bin\\apache\\conf\\httpd.conf"
+    },
+    "mysql": {
+        "port": 3306,
+        "user": "root",
+        "password": "password"
+    }
+}

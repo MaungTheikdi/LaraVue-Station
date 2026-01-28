@@ -1,11 +1,12 @@
 import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import scrolledtext, messagebox
 import subprocess
 import os
 import sys
 import threading
 import time
 import signal
+import json
 
 class MaungApp:
     def __init__(self, root):
@@ -18,13 +19,14 @@ class MaungApp:
         self.base_dir = os.path.dirname(os.path.abspath(__file__))
         self.bin_dir = os.path.join(self.base_dir, "bin")
         self.app_dir = os.path.join(self.base_dir, "app")
+        self.config = self.load_config()
+        self.apache_port = self.config.get("apache", {}).get("port", 8080)
         
         # Paths to executables (Adjust these if your folder names differ)
         self.paths = {
             "apache2": os.path.join(self.bin_dir, "apache", "bin", "httpd.exe"),
             "mysql": os.path.join(self.bin_dir, "mysql-9.4.0-winx64", "bin", "mysqld.exe"),
-            "php": os.path.join(self.bin_dir, "php", "php.exe"),
-            "phpmyadmin": os.path.join(self.app_dir, "phpmyadmin")
+            "php": os.path.join(self.bin_dir, "php", "php.exe")
         }
         self.mysql_defaults = os.path.join(self.bin_dir, "mysql-9.4.0-winx64", "my.ini")
 
@@ -46,12 +48,20 @@ class MaungApp:
                                   bg="#dc3545", fg="white", font=("Segoe UI", 10, "bold"), width=15, height=2, state=tk.DISABLED)
         self.btn_stop.pack(side=tk.LEFT, padx=10)
 
+        self.btn_clear_port = tk.Button(btn_frame, text="CLEAR PORT", command=self.clear_apache_port,
+                                        bg="#ff9800", fg="white", font=("Segoe UI", 10, "bold"), width=15, height=2)
+        self.btn_clear_port.pack(side=tk.LEFT, padx=10)
+
+        self.btn_settings = tk.Button(btn_frame, text="SETTINGS", command=self.open_settings,
+                                      bg="#007bff", fg="white", font=("Segoe UI", 10, "bold"), width=15, height=2)
+        self.btn_settings.pack(side=tk.LEFT, padx=10)
+
         # Status Indicators
         self.status_labels = {}
         status_frame = tk.Frame(root, bg="#f0f0f0")
         status_frame.pack(pady=5)
         
-        for service in ["Apache2", "MySQL", "PHP", "phpMyAdmin"]:
+        for service in ["Apache2", "MySQL", "PHP"]:
             lbl = tk.Label(status_frame, text=f"{service}: OFF", fg="gray", bg="#f0f0f0", font=("Consolas", 10))
             lbl.pack(side=tk.LEFT, padx=15)
             self.status_labels[service] = lbl
@@ -63,6 +73,88 @@ class MaungApp:
 
         # Handle Close Window
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    def load_config(self):
+        """Loads config.json if present; returns empty dict on failure."""
+        config_path = os.path.join(self.base_dir, "config.json")
+        if not os.path.exists(config_path):
+            return {}
+        try:
+            with open(config_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            if hasattr(self, "log_area"):
+                self.log(f"[Config] ERROR: {str(e)}")
+            else:
+                print(f"[Config] ERROR: {str(e)}")
+            return {}
+
+    def save_config(self):
+        config_path = os.path.join(self.base_dir, "config.json")
+        try:
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(self.config, f, indent=4)
+            self.log("[Config] Saved config.json")
+        except Exception as e:
+            self.log(f"[Config] ERROR: {str(e)}")
+
+    def open_settings(self):
+        win = tk.Toplevel(self.root)
+        win.title("Settings")
+        win.geometry("420x300")
+        win.configure(bg="#f0f0f0")
+        win.transient(self.root)
+        win.grab_set()
+
+        def add_row(parent, label_text, default_value, row):
+            tk.Label(parent, text=label_text, bg="#f0f0f0").grid(row=row, column=0, sticky="w", padx=10, pady=6)
+            entry = tk.Entry(parent, width=30)
+            entry.insert(0, str(default_value))
+            entry.grid(row=row, column=1, padx=10, pady=6)
+            return entry
+
+        frame = tk.Frame(win, bg="#f0f0f0")
+        frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+        apache_cfg = self.config.get("apache", {})
+        mysql_cfg = self.config.get("mysql", {})
+
+        entry_apache_port = add_row(frame, "Apache Port", apache_cfg.get("port", 8080), 0)
+        entry_apache_conf = add_row(frame, "Apache Conf Path", apache_cfg.get("conf", ""), 1)
+        entry_mysql_port = add_row(frame, "MySQL Port", mysql_cfg.get("port", 3306), 2)
+        entry_mysql_user = add_row(frame, "MySQL User", mysql_cfg.get("user", "root"), 3)
+        entry_mysql_pass = add_row(frame, "MySQL Password", mysql_cfg.get("password", ""), 4)
+
+        btn_row = tk.Frame(win, bg="#f0f0f0")
+        btn_row.pack(pady=10)
+
+        def on_save():
+            try:
+                apache_port = int(entry_apache_port.get().strip())
+                mysql_port = int(entry_mysql_port.get().strip())
+            except ValueError:
+                messagebox.showerror("Invalid Input", "Ports must be numbers.")
+                return
+
+            self.config["apache"] = {
+                "port": apache_port,
+                "conf": entry_apache_conf.get().strip()
+            }
+            self.config["mysql"] = {
+                "port": mysql_port,
+                "user": entry_mysql_user.get().strip(),
+                "password": entry_mysql_pass.get().strip()
+            }
+            self.apache_port = apache_port
+            self.save_config()
+            self.log("[Config] Settings updated. Restart services to apply.")
+            win.destroy()
+
+        def on_cancel():
+            win.destroy()
+
+        tk.Button(btn_row, text="SAVE", command=on_save, bg="#28a745", fg="white", width=12).pack(side=tk.LEFT, padx=8)
+        tk.Button(btn_row, text="CANCEL", command=on_cancel, bg="#6c757d", fg="white", width=12).pack(side=tk.LEFT, padx=8)
 
     def log(self, message):
         """Thread-safe logging to the text area"""
@@ -164,13 +256,6 @@ class MaungApp:
         else:
             self.log("[Apache2] Binary not found. Check path.")
 
-        # 3. phpMyAdmin info
-        if os.path.exists(self.paths['phpmyadmin']):
-            self.set_status("phpMyAdmin", "RUNNING")
-            self.log("[phpMyAdmin] Available at http://localhost:81/phpmyadmin")
-        else:
-            self.log("[phpMyAdmin] Folder not found. Check path.")
-
         self.is_running = True
         self.btn_start.config(state=tk.DISABLED)
         self.btn_stop.config(state=tk.NORMAL)
@@ -189,10 +274,54 @@ class MaungApp:
         
         self.processes.clear()
         self.is_running = False
-        for service in ["Apache2", "MySQL", "PHP", "phpMyAdmin"]:
+        for service in ["Apache2", "MySQL", "PHP"]:
             self.set_status(service, "OFF")
         self.btn_start.config(state=tk.NORMAL)
         self.btn_stop.config(state=tk.DISABLED)
+
+    def clear_apache_port(self):
+        """Kills any process listening on the configured Apache port."""
+        if sys.platform != "win32":
+            self.log("[Clear Port] Not supported on this OS.")
+            return
+
+        port = int(self.apache_port)
+        self.log(f"[Clear Port] Checking port {port}...")
+
+        try:
+            result = subprocess.run(
+                ["netstat", "-ano"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                creationflags=subprocess.CREATE_NO_WINDOW
+            )
+            lines = result.stdout.splitlines()
+            pids = set()
+            token = f":{port}"
+            for line in lines:
+                if token in line and "LISTENING" in line:
+                    parts = line.split()
+                    if parts:
+                        pids.add(parts[-1])
+
+            if not pids:
+                self.log(f"[Clear Port] No process is listening on port {port}.")
+                return
+
+            for pid in pids:
+                self.log(f"[Clear Port] Killing PID {pid} on port {port}...")
+                subprocess.run(
+                    ["taskkill", "/F", "/PID", pid],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                )
+
+            self.log(f"[Clear Port] Port {port} cleared.")
+        except Exception as e:
+            self.log(f"[Clear Port] ERROR: {str(e)}")
 
     def on_close(self):
         if self.is_running:
