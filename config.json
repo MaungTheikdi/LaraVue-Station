@@ -6,6 +6,7 @@
     "mysql": {
         "port": 3306,
         "user": "root",
-        "password": "password"
+        "password": "password",
+        "bin": "D:\\maung\\bin\\mysql-9.4.0-winx64\\bin\\mysqld.exe"
     }
 }

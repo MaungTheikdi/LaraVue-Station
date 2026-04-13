@@ -7,12 +7,13 @@ import threading
 import time
 import signal
 import json
+import webbrowser
 
 class MaungApp:
     def __init__(self, root):
         self.root = root
         self.root.title("LaraVue-Station Dev Environment Controller")
-        self.root.geometry("600x450")
+        self.root.geometry("600x510")
         self.root.configure(bg="#f0f0f0")
 
         # --- Configuration ---
@@ -23,9 +24,10 @@ class MaungApp:
         self.apache_port = self.config.get("apache", {}).get("port", 8080)
         
         # Paths to executables (Adjust these if your folder names differ)
+        _default_mysql_bin = os.path.join(self.bin_dir, "mysql-9.4.0-winx64", "bin", "mysqld.exe")
         self.paths = {
             "apache2": os.path.join(self.bin_dir, "apache", "bin", "httpd.exe"),
-            "mysql": os.path.join(self.bin_dir, "mysql-9.4.0-winx64", "bin", "mysqld.exe"),
+            "mysql": self.config.get("mysql", {}).get("bin", _default_mysql_bin),
             "php": os.path.join(self.bin_dir, "php", "php.exe")
         }
         self.mysql_defaults = os.path.join(self.bin_dir, "mysql-9.4.0-winx64", "my.ini")
@@ -66,6 +68,19 @@ class MaungApp:
             lbl.pack(side=tk.LEFT, padx=15)
             self.status_labels[service] = lbl
 
+        # Quick Links
+        links_frame = tk.Frame(root, bg="#f0f0f0")
+        links_frame.pack(pady=5)
+
+        tk.Button(links_frame, text="localhost:8080", command=self.open_localhost,
+                  bg="#17a2b8", fg="white", font=("Segoe UI", 9, "bold"), width=16, height=1).pack(side=tk.LEFT, padx=8)
+        tk.Button(links_frame, text="phpMyAdmin", command=self.open_phpmyadmin,
+                  bg="#6f42c1", fg="white", font=("Segoe UI", 9, "bold"), width=16, height=1).pack(side=tk.LEFT, padx=8)
+        tk.Button(links_frame, text="www Directory", command=self.open_www_dir,
+                  bg="#fd7e14", fg="white", font=("Segoe UI", 9, "bold"), width=16, height=1).pack(side=tk.LEFT, padx=8)
+        tk.Button(links_frame, text="mysqld.exe Directory", command=self.start_mysql_only,
+                  bg="#28a745", fg="white", font=("Segoe UI", 9, "bold"), width=16, height=1).pack(side=tk.LEFT, padx=8)
+
         # Log Window
         tk.Label(root, text="Process Logs:", bg="#f0f0f0").pack(anchor="w", padx=10)
         self.log_area = scrolledtext.ScrolledText(root, height=12, state='disabled', font=("Consolas", 9))
@@ -101,7 +116,7 @@ class MaungApp:
     def open_settings(self):
         win = tk.Toplevel(self.root)
         win.title("Settings")
-        win.geometry("420x300")
+        win.geometry("520x360")
         win.configure(bg="#f0f0f0")
         win.transient(self.root)
         win.grab_set()
@@ -119,11 +134,13 @@ class MaungApp:
         apache_cfg = self.config.get("apache", {})
         mysql_cfg = self.config.get("mysql", {})
 
-        entry_apache_port = add_row(frame, "Apache Port", apache_cfg.get("port", 8080), 0)
+        _default_bin = os.path.join(self.bin_dir, "mysql-9.4.0-winx64", "bin", "mysqld.exe")
+        entry_apache_port = add_row(frame, "Apache Port",      apache_cfg.get("port", 8080), 0)
         entry_apache_conf = add_row(frame, "Apache Conf Path", apache_cfg.get("conf", ""), 1)
-        entry_mysql_port = add_row(frame, "MySQL Port", mysql_cfg.get("port", 3306), 2)
-        entry_mysql_user = add_row(frame, "MySQL User", mysql_cfg.get("user", "root"), 3)
-        entry_mysql_pass = add_row(frame, "MySQL Password", mysql_cfg.get("password", ""), 4)
+        entry_mysql_port  = add_row(frame, "MySQL Port",       mysql_cfg.get("port", 3306), 2)
+        entry_mysql_user  = add_row(frame, "MySQL User",       mysql_cfg.get("user", "root"), 3)
+        entry_mysql_pass  = add_row(frame, "MySQL Password",   mysql_cfg.get("password", ""), 4)
+        entry_mysql_bin   = add_row(frame, "mysqld.exe Path",  mysql_cfg.get("bin", _default_bin), 5)
 
         btn_row = tk.Frame(win, bg="#f0f0f0")
         btn_row.pack(pady=10)
@@ -143,9 +160,11 @@ class MaungApp:
             self.config["mysql"] = {
                 "port": mysql_port,
                 "user": entry_mysql_user.get().strip(),
-                "password": entry_mysql_pass.get().strip()
+                "password": entry_mysql_pass.get().strip(),
+                "bin": entry_mysql_bin.get().strip()
             }
             self.apache_port = apache_port
+            self.paths["mysql"] = entry_mysql_bin.get().strip()
             self.save_config()
             self.log("[Config] Settings updated. Restart services to apply.")
             win.destroy()
@@ -322,6 +341,26 @@ class MaungApp:
             self.log(f"[Clear Port] Port {port} cleared.")
         except Exception as e:
             self.log(f"[Clear Port] ERROR: {str(e)}")
+
+    def start_mysql_only(self):
+        if os.path.exists(self.mysql_defaults):
+            mysqld_path = os.path.join(self.base_dir, "bin", "mysql-9.4.0-winx64", "bin")
+            self.log(f"[Explorer] Opening {mysqld_path}")
+            os.startfile(mysqld_path)
+    def open_localhost(self):
+        url = f"http://localhost:{self.apache_port}"
+        self.log(f"[Browser] Opening {url}")
+        webbrowser.open(url)
+
+    def open_phpmyadmin(self):
+        url = f"http://localhost:{self.apache_port}/phpmyadmin"
+        self.log(f"[Browser] Opening {url}")
+        webbrowser.open(url)
+
+    def open_www_dir(self):
+        www_path = os.path.join(self.base_dir, "www")
+        self.log(f"[Explorer] Opening {www_path}")
+        os.startfile(www_path)
 
     def on_close(self):
         if self.is_running:
