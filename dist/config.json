@@ -1,0 +1,19 @@
+{
+    "base": "D:/maung/dist",
+    "apache": {
+        "port": 8080,
+        "bin": "D:/maung/dist/bin/apache/bin/httpd.exe",
+        "conf": "D:/maung/dist/bin/apache/conf/httpd.conf"
+    },
+    "mysql": {
+        "port": 3306,
+        "user": "root",
+        "password": "password",
+        "bin": "D:/maung/dist/bin/mysql-9.4.0-winx64/bin/mysqld.exe",
+        "defaults": "D:/maung/dist/bin/mysql-9.4.0-winx64/my.ini"
+    },
+    "php": {
+        "bin": "D:/maung/dist/bin/php/php.exe"
+    },
+    "www": "D:/maung/dist/www"
+}
