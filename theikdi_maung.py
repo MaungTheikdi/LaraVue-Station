@@ -427,9 +427,11 @@ class DevStation:
         if not os.path.exists(bin_):
             self._emit(f"[MySQL] binary missing: {bin_}", "err")
             return
-        cmd = [bin_, "--console"]
+        # --defaults-file MUST be the first argument after the binary (MySQL requirement)
+        cmd = [bin_]
         if os.path.exists(ini_):
             cmd.append(f"--defaults-file={ini_}")
+        cmd.append("--console")
         self._set_status("MySQL", "STARTING")
         self._spawn("MySQL", cmd, str(Path(bin_).parent))
 
